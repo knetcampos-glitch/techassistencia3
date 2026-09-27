@@ -1,0 +1,1412 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="h-full bg-slate-900 text-slate-100">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tech Assistência - Sistema & IDE Integrado</title>
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <!-- Google Fonts Inter & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  
+  <!-- JSZip for exporting folder zip -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            brand: {
+              50: '#f0f9ff',
+              100: '#e0f2fe',
+              500: '#0ea5e9',
+              600: '#0284c7',
+              700: '#0369a1',
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Custom Stylesheet Simulation -->
+  <style>
+    .glass-panel {
+      background: rgba(30, 41, 59, 0.7);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    
+    .code-scroll::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    .code-scroll::-webkit-scrollbar-track {
+      background: #0f172a;
+    }
+    .code-scroll::-webkit-scrollbar-thumb {
+      background: #334155;
+      border-radius: 4px;
+    }
+    .code-scroll::-webkit-scrollbar-thumb:hover {
+      background: #475569;
+    }
+
+    @media print {
+      body * {
+        visibility: hidden;
+      }
+      #printable-os, #printable-os * {
+        visibility: visible;
+      }
+      #printable-os {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        background: white !important;
+        color: black !important;
+        padding: 20px;
+      }
+      .no-print {
+        display: none !important;
+      }
+    }
+  </style>
+</head>
+<body class="h-full flex flex-col font-sans overflow-x-hidden antialiased select-none">
+
+  <!-- Top Navigation Header -->
+  <header class="h-16 bg-slate-950 border-b border-slate-800 px-4 flex items-center justify-between z-30 shrink-0">
+    <div class="flex items-center space-x-3">
+      <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center text-white shadow-lg shadow-cyan-500/20">
+        <i class="fa-solid fa-microchip text-lg"></i>
+      </div>
+      <div>
+        <h1 class="font-bold text-slate-100 text-base leading-none">Tech Assistência</h1>
+        <span class="text-xs text-slate-400 font-mono">v2.5 • Enterprise Hub</span>
+      </div>
+    </div>
+
+    <!-- Mode Switcher & Global Controls -->
+    <div class="flex items-center space-x-2 sm:space-x-4">
+      <!-- Workspace View Toggle -->
+      <div class="bg-slate-900 p-1 rounded-xl border border-slate-800 flex items-center">
+        <button id="btn-mode-app" onclick="switchMode('app')" class="px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center space-x-2 transition-all bg-brand-600 text-white shadow-md">
+          <i class="fa-solid fa-desktop"></i>
+          <span class="hidden sm:inline">Sistema Operacional</span>
+        </button>
+        <button id="btn-mode-ide" onclick="switchMode('ide')" class="px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center space-x-2 transition-all text-slate-400 hover:text-slate-200">
+          <i class="fa-solid fa-code"></i>
+          <span class="hidden sm:inline">Arquivos & IDE (/tech-assistencia/)</span>
+        </button>
+      </div>
+
+      <div class="h-5 w-px bg-slate-800 hidden sm:block"></div>
+
+      <!-- Auth Action -->
+      <div id="user-header-status" class="flex items-center space-x-2">
+        <button id="btn-logout" onclick="logout()" class="hidden text-xs text-slate-400 hover:text-red-400 p-2 rounded-lg hover:bg-slate-800 transition">
+          <i class="fa-solid fa-right-from-bracket mr-1"></i> Sair
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Notification Toast Container -->
+  <div id="toast-container" class="fixed top-20 right-5 z-50 flex flex-col space-y-2 pointer-events-none"></div>
+
+  <!-- MAIN CONTAINER -->
+  <div class="flex-1 flex overflow-hidden relative">
+
+    <!-- VIEW 1: APP SYSTEM WORKSPACE -->
+    <main id="view-app" class="flex-1 flex flex-col md:flex-row overflow-hidden w-full">
+      
+      <!-- LOGIN OVERLAY IF NOT AUTHENTICATED -->
+      <div id="auth-screen" class="absolute inset-0 bg-slate-950/95 backdrop-blur-md z-40 flex items-center justify-center p-4">
+        <div class="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-8 shadow-2xl relative overflow-hidden">
+          <div class="absolute -top-10 -right-10 w-32 h-32 bg-cyan-500/10 rounded-full blur-2xl"></div>
+          <div class="text-center mb-8">
+            <div class="w-16 h-16 bg-slate-800 border border-slate-700 rounded-2xl mx-auto flex items-center justify-center text-cyan-400 text-2xl mb-4 shadow-inner">
+              <i class="fa-solid fa-lock"></i>
+            </div>
+            <h2 class="text-2xl font-bold text-white">Acesso Restrito</h2>
+            <p class="text-xs text-slate-400 mt-1">Digite sua senha de acesso para continuar</p>
+          </div>
+
+          <form onsubmit="handleLogin(event)" class="space-y-4">
+            <div>
+              <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Senha do Sistema</label>
+              <div class="relative">
+                <input id="login-password" type="password" placeholder="••••••••" required class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white placeholder-slate-600 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition font-mono text-center text-lg">
+                <button type="button" onclick="togglePasswordVisibility('login-password')" class="absolute right-3 top-3.5 text-slate-500 hover:text-slate-300">
+                  <i class="fa-solid fa-eye"></i>
+                </button>
+              </div>
+              <p class="text-[11px] text-slate-500 mt-2 text-center">Senha Padrão Inicial: <span class="font-mono text-cyan-400 font-bold">1234</span></p>
+            </div>
+
+            <button type="submit" class="w-full bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-semibold py-3 rounded-xl shadow-lg shadow-cyan-500/25 transition duration-200">
+              Entrar no Sistema
+            </button>
+          </form>
+        </div>
+      </div>
+
+      <!-- APP NAVIGATION SIDEBAR -->
+      <aside id="app-sidebar" class="w-full md:w-64 bg-slate-950 border-r border-slate-800 flex flex-col shrink-0">
+        <nav class="p-4 space-y-1.5 flex-1">
+          <button onclick="navigateTab('dashboard')" id="nav-dashboard" class="nav-btn active w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-medium transition text-white bg-slate-800/80 border border-slate-700/50">
+            <i class="fa-solid fa-chart-pie w-5 text-cyan-400"></i>
+            <span>Dashboard</span>
+          </button>
+          <button onclick="navigateTab('clients')" id="nav-clients" class="nav-btn w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-medium transition text-slate-400 hover:bg-slate-900 hover:text-white">
+            <i class="fa-solid fa-users w-5 text-indigo-400"></i>
+            <span>Clientes</span>
+          </button>
+          <button onclick="navigateTab('orders')" id="nav-orders" class="nav-btn w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-medium transition text-slate-400 hover:bg-slate-900 hover:text-white">
+            <i class="fa-solid fa-screwdriver-wrench w-5 text-amber-400"></i>
+            <span>Ordens de Serviço</span>
+          </button>
+          <button onclick="navigateTab('settings')" id="nav-settings" class="nav-btn w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-medium transition text-slate-400 hover:bg-slate-900 hover:text-white">
+            <i class="fa-solid fa-gear w-5 text-slate-400"></i>
+            <span>Configurações</span>
+          </button>
+        </nav>
+
+        <!-- Quick System Stats Badge -->
+        <div class="p-4 m-4 rounded-xl bg-slate-900 border border-slate-800/80 text-xs text-slate-400 space-y-2">
+          <div class="flex justify-between">
+            <span>Status BD:</span>
+            <span class="text-emerald-400 font-semibold flex items-center"><i class="fa-solid fa-circle text-[8px] mr-1"></i> LocalStorage</span>
+          </div>
+          <div class="flex justify-between">
+            <span>Total de OS:</span>
+            <span id="badge-total-os" class="font-mono text-white">0</span>
+          </div>
+        </div>
+      </aside>
+
+      <!-- APP CONTENT AREA -->
+      <section class="flex-1 bg-slate-900 overflow-y-auto p-4 md:p-8 code-scroll">
+        
+        <!-- DASHBOARD TAB -->
+        <div id="tab-dashboard" class="tab-content space-y-6">
+          <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <h2 class="text-2xl font-bold text-white">Visão Geral</h2>
+              <p class="text-xs text-slate-400">Resumo em tempo real da assistência técnica</p>
+            </div>
+            <div class="flex items-center space-x-3">
+              <button onclick="openModal('modal-os')" class="bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold px-4 py-2.5 rounded-xl text-xs flex items-center space-x-2 transition shadow-lg shadow-cyan-500/20">
+                <i class="fa-solid fa-plus"></i>
+                <span>Nova Ordem de Serviço</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- METRICS GRID -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div class="glass-panel p-5 rounded-2xl relative overflow-hidden">
+              <div class="flex justify-between items-start">
+                <div>
+                  <p class="text-xs font-medium text-slate-400">Faturamento Concluído</p>
+                  <h3 id="dash-revenue" class="text-2xl font-bold text-emerald-400 mt-2 font-mono">R$ 0,00</h3>
+                </div>
+                <div class="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center">
+                  <i class="fa-solid fa-dollar-sign text-lg"></i>
+                </div>
+              </div>
+              <div class="mt-4 text-[11px] text-slate-500">Baseado nas Ordens Entregues/Concluídas</div>
+            </div>
+
+            <div class="glass-panel p-5 rounded-2xl relative overflow-hidden">
+              <div class="flex justify-between items-start">
+                <div>
+                  <p class="text-xs font-medium text-slate-400">OS Em Análise / Abertas</p>
+                  <h3 id="dash-os-open" class="text-2xl font-bold text-amber-400 mt-2 font-mono">0</h3>
+                </div>
+                <div class="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-400 flex items-center justify-center">
+                  <i class="fa-solid fa-clock text-lg"></i>
+                </div>
+              </div>
+              <div class="mt-4 text-[11px] text-slate-500">Aguardando orçamento ou diagnóstico</div>
+            </div>
+
+            <div class="glass-panel p-5 rounded-2xl relative overflow-hidden">
+              <div class="flex justify-between items-start">
+                <div>
+                  <p class="text-xs font-medium text-slate-400">OS Concluídas</p>
+                  <h3 id="dash-os-completed" class="text-2xl font-bold text-cyan-400 mt-2 font-mono">0</h3>
+                </div>
+                <div class="w-10 h-10 rounded-xl bg-cyan-500/10 text-cyan-400 flex items-center justify-center">
+                  <i class="fa-solid fa-check-circle text-lg"></i>
+                </div>
+              </div>
+              <div class="mt-4 text-[11px] text-slate-500">Prontas para retirada ou entregues</div>
+            </div>
+
+            <div class="glass-panel p-5 rounded-2xl relative overflow-hidden">
+              <div class="flex justify-between items-start">
+                <div>
+                  <p class="text-xs font-medium text-slate-400">Clientes Cadastrados</p>
+                  <h3 id="dash-clients-count" class="text-2xl font-bold text-indigo-400 mt-2 font-mono">0</h3>
+                </div>
+                <div class="w-10 h-10 rounded-xl bg-indigo-500/10 text-indigo-400 flex items-center justify-center">
+                  <i class="fa-solid fa-users text-lg"></i>
+                </div>
+              </div>
+              <div class="mt-4 text-[11px] text-slate-500">Base total de clientes cadastrados</div>
+            </div>
+          </div>
+
+          <!-- RECENT ORDERS TABLE SUMMARY -->
+          <div class="glass-panel rounded-2xl p-6">
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="text-base font-bold text-white flex items-center">
+                <i class="fa-solid fa-list-check text-cyan-400 mr-2"></i> ÚLTIMAS ORDENS DE SERVIÇO
+              </h3>
+              <button onclick="navigateTab('orders')" class="text-xs text-cyan-400 hover:underline">Ver todas &rarr;</button>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="w-full text-left text-xs">
+                <thead class="text-slate-400 uppercase bg-slate-950/50 border-b border-slate-800">
+                  <tr>
+                    <th class="p-3">#OS</th>
+                    <th class="p-3">Cliente</th>
+                    <th class="p-3">Equipamento</th>
+                    <th class="p-3">Status</th>
+                    <th class="p-3">Valor Total</th>
+                    <th class="p-3 text-right">Ação</th>
+                  </tr>
+                </thead>
+                <tbody id="dash-recent-os-body" class="divide-y divide-slate-800 text-slate-300">
+                  <!-- Dynamic render -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- CLIENTS TAB -->
+        <div id="tab-clients" class="tab-content hidden space-y-6">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h2 class="text-2xl font-bold text-white">Gerenciamento de Clientes</h2>
+              <p class="text-xs text-slate-400">Cadastre e acompanhe os dados dos seus clientes</p>
+            </div>
+            <button onclick="openModal('modal-client')" class="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold px-4 py-2.5 rounded-xl text-xs flex items-center space-x-2 transition shadow-lg shadow-indigo-600/20">
+              <i class="fa-solid fa-user-plus"></i>
+              <span>Novo Cliente</span>
+            </button>
+          </div>
+
+          <!-- CLIENTS TABLE -->
+          <div class="glass-panel rounded-2xl overflow-hidden">
+            <div class="p-4 border-b border-slate-800 bg-slate-950/40 flex items-center">
+              <div class="relative flex-1 max-w-xs">
+                <i class="fa-solid fa-magnifying-glass absolute left-3 top-3 text-slate-500 text-xs"></i>
+                <input type="text" id="client-search" oninput="renderClientsTable()" placeholder="Buscar por nome ou CPF..." class="w-full bg-slate-900 border border-slate-800 rounded-lg pl-8 pr-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500">
+              </div>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="w-full text-left text-xs">
+                <thead class="text-slate-400 uppercase bg-slate-950/60 border-b border-slate-800">
+                  <tr>
+                    <th class="p-3">Nome</th>
+                    <th class="p-3">Telefone / WhatsApp</th>
+                    <th class="p-3">CPF / CNPJ</th>
+                    <th class="p-3">Equipamento Padrão</th>
+                    <th class="p-3 text-right">Ações</th>
+                  </tr>
+                </thead>
+                <tbody id="clients-table-body" class="divide-y divide-slate-800 text-slate-300">
+                  <!-- Dynamic render -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- SERVICE ORDERS TAB -->
+        <div id="tab-orders" class="tab-content hidden space-y-6">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h2 class="text-2xl font-bold text-white">Ordens de Serviço</h2>
+              <p class="text-xs text-slate-400">Controle total de manutenções, peças e status de entrega</p>
+            </div>
+            <button onclick="openModal('modal-os')" class="bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold px-4 py-2.5 rounded-xl text-xs flex items-center space-x-2 transition shadow-lg shadow-cyan-500/20">
+              <i class="fa-solid fa-plus"></i>
+              <span>Criar Nova OS</span>
+            </button>
+          </div>
+
+          <!-- OS FILTERS & LIST -->
+          <div class="glass-panel rounded-2xl overflow-hidden">
+            <div class="p-4 border-b border-slate-800 bg-slate-950/40 flex flex-wrap items-center justify-between gap-3">
+              <div class="flex items-center space-x-2">
+                <span class="text-xs text-slate-400 font-medium">Filtrar por Status:</span>
+                <select id="os-filter-status" onchange="renderOrdersTable()" class="bg-slate-900 border border-slate-800 text-xs rounded-lg px-3 py-1.5 text-white focus:outline-none focus:border-cyan-500">
+                  <option value="ALL">Todos os Status</option>
+                  <option value="Em Análise">Em Análise</option>
+                  <option value="Aguardando Peças">Aguardando Peças</option>
+                  <option value="Aprovado">Aprovado</option>
+                  <option value="Concluído">Concluído</option>
+                  <option value="Entregue">Entregue</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="overflow-x-auto">
+              <table class="w-full text-left text-xs">
+                <thead class="text-slate-400 uppercase bg-slate-950/60 border-b border-slate-800">
+                  <tr>
+                    <th class="p-3">#OS</th>
+                    <th class="p-3">Data</th>
+                    <th class="p-3">Cliente</th>
+                    <th class="p-3">Equipamento</th>
+                    <th class="p-3">Status</th>
+                    <th class="p-3">Valor Total</th>
+                    <th class="p-3 text-right">Ações & Notificação</th>
+                  </tr>
+                </thead>
+                <tbody id="orders-table-body" class="divide-y divide-slate-800 text-slate-300">
+                  <!-- Dynamic render -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- SETTINGS TAB -->
+        <div id="tab-settings" class="tab-content hidden space-y-6">
+          <div>
+            <h2 class="text-2xl font-bold text-white">Configurações & Segurança</h2>
+            <p class="text-xs text-slate-400">Altere suas credenciais e gerencie os dados gravados</p>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <!-- Password Change Card -->
+            <div class="glass-panel rounded-2xl p-6 space-y-4">
+              <h3 class="text-base font-bold text-white flex items-center">
+                <i class="fa-solid fa-key text-cyan-400 mr-2"></i> Alterar Senha de Acesso
+              </h3>
+              <form onsubmit="handleChangePassword(event)" class="space-y-4">
+                <div>
+                  <label class="block text-xs font-medium text-slate-300 mb-1">Senha Atual</label>
+                  <input id="pwd-current" type="password" required class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-cyan-500">
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-slate-300 mb-1">Nova Senha</label>
+                  <input id="pwd-new" type="password" required minlength="4" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-cyan-500">
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-slate-300 mb-1">Confirmar Nova Senha</label>
+                  <input id="pwd-confirm" type="password" required minlength="4" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-cyan-500">
+                </div>
+                <button type="submit" class="bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold px-4 py-2.5 rounded-xl text-xs w-full transition">
+                  Atualizar Senha
+                </button>
+              </form>
+            </div>
+
+            <!-- Database & System Management -->
+            <div class="glass-panel rounded-2xl p-6 space-y-4 flex flex-col justify-between">
+              <div>
+                <h3 class="text-base font-bold text-white flex items-center">
+                  <i class="fa-solid fa-database text-amber-400 mr-2"></i> Gestão de Dados
+                </h3>
+                <p class="text-xs text-slate-400 mt-2">
+                  Os dados do sistema são persistidos no <span class="text-amber-300 font-mono">LocalStorage</span> do navegador. Você pode carregar dados de teste demonstrativos ou redefinir a base inteira.
+                </p>
+              </div>
+
+              <div class="space-y-2 pt-4 border-t border-slate-800">
+                <button onclick="seedDemoData()" class="w-full bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold py-2.5 rounded-xl transition flex items-center justify-center space-x-2">
+                  <i class="fa-solid fa-vial text-cyan-400"></i>
+                  <span>Carregar Dados Demonstrativos</span>
+                </button>
+                <button onclick="resetSystemData()" class="w-full bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 text-xs font-semibold py-2.5 rounded-xl transition flex items-center justify-center space-x-2">
+                  <i class="fa-solid fa-trash-can"></i>
+                  <span>Zerar Banco de Dados (Reset)</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </section>
+    </main>
+
+    <!-- VIEW 2: DEVELOPER / CODE IDE WORKSPACE -->
+    <main id="view-ide" class="flex-1 flex flex-col md:flex-row overflow-hidden w-full hidden">
+      
+      <!-- FILE EXPLORER SIDEBAR -->
+      <aside class="w-full md:w-64 bg-slate-950 border-r border-slate-800 flex flex-col shrink-0">
+        <!-- Folder Tree Header -->
+        <div class="p-3 border-b border-slate-800 flex items-center justify-between bg-slate-900/50">
+          <div class="flex items-center space-x-2 text-xs font-semibold text-slate-300">
+            <i class="fa-solid fa-folder-open text-amber-400"></i>
+            <span>/tech-assistencia/</span>
+          </div>
+          <button onclick="downloadProjectZip()" title="Baixar Projeto Completo em ZIP" class="text-xs bg-slate-800 hover:bg-slate-700 text-cyan-400 px-2 py-1 rounded transition flex items-center space-x-1">
+            <i class="fa-solid fa-file-zipper"></i>
+            <span class="text-[10px]">ZIP</span>
+          </button>
+        </div>
+
+        <!-- File List Tree -->
+        <div class="p-2 space-y-1 flex-1 overflow-y-auto font-mono text-xs">
+          <button onclick="openFileInIDE('index.html')" id="file-tab-index.html" class="file-tree-btn active w-full flex items-center space-x-2.5 px-3 py-2 rounded-lg text-slate-300 bg-slate-800/80 hover:bg-slate-800 transition">
+            <i class="fa-brands fa-html5 text-orange-500 text-sm"></i>
+            <span>index.html</span>
+          </button>
+          <button onclick="openFileInIDE('style.css')" id="file-tab-style.css" class="file-tree-btn w-full flex items-center space-x-2.5 px-3 py-2 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition">
+            <i class="fa-brands fa-css3-alt text-blue-400 text-sm"></i>
+            <span>style.css</span>
+          </button>
+          <button onclick="openFileInIDE('app.js')" id="file-tab-app.js" class="file-tree-btn w-full flex items-center space-x-2.5 px-3 py-2 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition">
+            <i class="fa-brands fa-js text-yellow-400 text-sm"></i>
+            <span>app.js</span>
+          </button>
+          <button onclick="openFileInIDE('database.js')" id="file-tab-database.js" class="file-tree-btn w-full flex items-center space-x-2.5 px-3 py-2 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition">
+            <i class="fa-solid fa-database text-emerald-400 text-sm"></i>
+            <span>database.js</span>
+          </button>
+        </div>
+
+        <div class="p-3 border-t border-slate-800 bg-slate-950 text-[11px] text-slate-500">
+          <p><i class="fa-solid fa-circle-info text-cyan-400"></i> Todos os arquivos estão agrupados nesta estrutura virtual e sincronizados.</p>
+        </div>
+      </aside>
+
+      <!-- CODE EDITOR CONTAINER -->
+      <section class="flex-1 flex flex-col bg-slate-900 overflow-hidden">
+        <!-- Editor Header / Controls -->
+        <div class="h-10 bg-slate-950 border-b border-slate-800 px-4 flex items-center justify-between text-xs font-mono">
+          <div class="flex items-center space-x-2">
+            <span id="ide-active-filename" class="text-slate-200 font-semibold">index.html</span>
+            <span id="ide-file-size" class="text-slate-500 text-[10px]"></span>
+          </div>
+          <div class="flex items-center space-x-2">
+            <button onclick="copyCurrentCode()" class="text-slate-400 hover:text-white px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 transition flex items-center space-x-1">
+              <i class="fa-solid fa-copy"></i>
+              <span>Copiar Código</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Textarea Code Display -->
+        <div class="flex-1 relative overflow-hidden">
+          <textarea id="ide-editor" spellcheck="false" class="w-full h-full bg-slate-950 text-slate-200 font-mono text-xs p-4 leading-relaxed focus:outline-none resize-none code-scroll border-none" readonly></textarea>
+        </div>
+      </section>
+    </main>
+
+  </div>
+
+  <!-- MODAL: CLIENT FORM -->
+  <div id="modal-client" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl">
+      <div class="p-5 border-b border-slate-800 flex justify-between items-center bg-slate-950/50">
+        <h3 id="modal-client-title" class="font-bold text-white text-base">Novo Cliente</h3>
+        <button onclick="closeModal('modal-client')" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
+      </div>
+
+      <form onsubmit="saveClient(event)" class="p-6 space-y-4">
+        <input type="hidden" id="client-id">
+        
+        <div>
+          <label class="block text-xs font-medium text-slate-300 mb-1">Nome Completo *</label>
+          <input type="text" id="client-name" required class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-indigo-500">
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-medium text-slate-300 mb-1">WhatsApp / Telefone *</label>
+            <input type="text" id="client-phone" placeholder="51999999999" required class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-indigo-500">
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-300 mb-1">CPF / CNPJ</label>
+            <input type="text" id="client-cpf" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-indigo-500">
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-medium text-slate-300 mb-1">Endereço Completo</label>
+          <input type="text" id="client-address" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-indigo-500">
+        </div>
+
+        <div>
+          <label class="block text-xs font-medium text-slate-300 mb-1">Equipamento Padrão / Observações</label>
+          <input type="text" id="client-equipment" placeholder="Ex: Notebook Dell Inspiron / Celular Samsung S21" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-indigo-500">
+        </div>
+
+        <div class="flex justify-end space-x-2 pt-4 border-t border-slate-800">
+          <button type="button" onclick="closeModal('modal-client')" class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:bg-slate-800">Cancelar</button>
+          <button type="submit" class="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold px-5 py-2 rounded-xl text-xs transition">Salvar Cliente</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: SERVICE ORDER (OS) FORM -->
+  <div id="modal-os" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-2xl overflow-hidden shadow-2xl max-h-[90vh] flex flex-col">
+      <div class="p-5 border-b border-slate-800 flex justify-between items-center bg-slate-950/50">
+        <h3 id="modal-os-title" class="font-bold text-white text-base">Nova Ordem de Serviço</h3>
+        <button onclick="closeModal('modal-os')" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
+      </div>
+
+      <form onsubmit="saveOrder(event)" class="p-6 space-y-4 overflow-y-auto flex-1 code-scroll">
+        <input type="hidden" id="os-id">
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-medium text-slate-300 mb-1">Cliente *</label>
+            <select id="os-client-id" required class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-cyan-500">
+              <!-- Options loaded dynamically -->
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-300 mb-1">Status da OS *</label>
+            <select id="os-status" required class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-cyan-500">
+              <option value="Em Análise">Em Análise</option>
+              <option value="Aguardando Peças">Aguardando Peças</option>
+              <option value="Aprovado">Aprovado</option>
+              <option value="Concluído">Concluído</option>
+              <option value="Entregue">Entregue</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-medium text-slate-300 mb-1">Equipamento / Modelo *</label>
+          <input type="text" id="os-equipment" placeholder="Ex: Macbook Pro M1 2020 / iPhone 13 Pro" required class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-cyan-500">
+        </div>
+
+        <div>
+          <label class="block text-xs font-medium text-slate-300 mb-1">Defeito Relatado pelo Cliente *</label>
+          <textarea id="os-defect" rows="2" required placeholder="Relato inicial do problema..." class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-cyan-500 resize-none"></textarea>
+        </div>
+
+        <div>
+          <label class="block text-xs font-medium text-slate-300 mb-1">Serviços / Peças Substituídas</label>
+          <textarea id="os-services" rows="2" placeholder="Descrição do reparo realizado ou peças aplicadas..." class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-cyan-500 resize-none"></textarea>
+        </div>
+
+        <div>
+          <label class="block text-xs font-medium text-slate-300 mb-1">Valor Total Orçamento (R$) *</label>
+          <input type="number" step="0.01" id="os-price" required placeholder="0.00" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white font-mono focus:outline-none focus:border-cyan-500">
+        </div>
+
+        <div class="flex justify-end space-x-2 pt-4 border-t border-slate-800">
+          <button type="button" onclick="closeModal('modal-os')" class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:bg-slate-800">Cancelar</button>
+          <button type="submit" class="bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold px-5 py-2 rounded-xl text-xs transition">Salvar Ordem de Serviço</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: OS PRINT RECEIPT -->
+  <div id="modal-print-os" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-2xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+      <div class="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-950">
+        <span class="text-xs font-mono text-cyan-400">Visualização de Impressão</span>
+        <div class="flex space-x-2">
+          <button onclick="window.print()" class="bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-bold px-3 py-1.5 rounded-lg flex items-center space-x-1">
+            <i class="fa-solid fa-print"></i>
+            <span>Imprimir</span>
+          </button>
+          <button onclick="closeModal('modal-print-os')" class="text-slate-400 hover:text-white px-2"><i class="fa-solid fa-xmark text-lg"></i></button>
+        </div>
+      </div>
+
+      <div class="p-6 overflow-y-auto code-scroll bg-slate-950 text-slate-100" id="printable-os">
+        <!-- Printable Template rendered dynamically -->
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /* ==========================================================================
+       VIRTUAL FILE CONTENTS FOR THE IDE / DEVELOPER VIEW
+       ========================================================================== */
+    const VIRTUAL_FILES = {
+      'index.html': `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Tech Assistência - Interface Principal</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Tech Assistência Application Layout -->
+  <div id="app">
+    <header>
+      <h1>Tech Assistência - Enterprise System</h1>
+    </header>
+    <main id="main-content">
+      <!-- Módulos do Sistema: Dashboard, Clientes, OS -->
+    </main>
+  </div>
+  <script src="database.js"><\/script>
+  <script src="app.js"><\/script>
+</body>
+</html>`,
+
+      'style.css': `/* Estilos do Sistema Tech Assistência */
+:root {
+  --bg-primary: #0f172a;
+  --bg-secondary: #1e293b;
+  --accent-cyan: #0ea5e9;
+  --text-main: #f8fafc;
+}
+
+body {
+  margin: 0;
+  font-family: 'Inter', sans-serif;
+  background-color: var(--bg-primary);
+  color: var(--text-main);
+}
+
+.glass-card {
+  background: rgba(30, 41, 59, 0.7);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 1rem;
+}`,
+
+      'app.js': `/* Lógica do Sistema e Controle de Interface */
+document.addEventListener('DOMContentLoaded', () => {
+  console.log('Tech Assistência Inicializada');
+  DB.init();
+  renderApp();
+});
+
+function renderApp() {
+  const osList = DB.getOrders();
+  const clients = DB.getClients();
+  console.log(\`Total de OS: \${osList.length}, Clientes: \${clients.length}\`);
+}`,
+
+      'database.js': `/* Gerenciador de Armazenamento e LocalStorage */
+const DB_KEYS = {
+  CLIENTS: 'tech_clients_v2',
+  ORDERS: 'tech_orders_v2',
+  AUTH_PWD: 'tech_auth_password_v2'
+};
+
+const DB = {
+  init() {
+    if (!localStorage.getItem(DB_KEYS.AUTH_PWD)) {
+      localStorage.setItem(DB_KEYS.AUTH_PWD, '1234');
+    }
+  },
+  getClients() {
+    return JSON.parse(localStorage.getItem(DB_KEYS.CLIENTS) || '[]');
+  },
+  getOrders() {
+    return JSON.parse(localStorage.getItem(DB_KEYS.ORDERS) || '[]');
+  }
+};`
+    };
+
+    /* ==========================================================================
+       DATABASE LOGIC (LocalStorage abstraction)
+       ========================================================================== */
+    const DB_KEYS = {
+      CLIENTS: 'tech_clients_v2',
+      ORDERS: 'tech_orders_v2',
+      AUTH_PWD: 'tech_auth_password_v2',
+      SESSION: 'tech_logged_in_v2'
+    };
+
+    const DB = {
+      init() {
+        if (!localStorage.getItem(DB_KEYS.AUTH_PWD)) {
+          localStorage.setItem(DB_KEYS.AUTH_PWD, '1234');
+        }
+        if (!localStorage.getItem(DB_KEYS.CLIENTS)) {
+          this.seedDefaultData();
+        }
+      },
+
+      getPassword() {
+        return localStorage.getItem(DB_KEYS.AUTH_PWD) || '1234';
+      },
+
+      setPassword(newPwd) {
+        localStorage.setItem(DB_KEYS.AUTH_PWD, newPwd);
+      },
+
+      getClients() {
+        return JSON.parse(localStorage.getItem(DB_KEYS.CLIENTS) || '[]');
+      },
+
+      saveClients(clients) {
+        localStorage.setItem(DB_KEYS.CLIENTS, JSON.stringify(clients));
+      },
+
+      getOrders() {
+        return JSON.parse(localStorage.getItem(DB_KEYS.ORDERS) || '[]');
+      },
+
+      saveOrders(orders) {
+        localStorage.setItem(DB_KEYS.ORDERS, JSON.stringify(orders));
+      },
+
+      seedDefaultData() {
+        const initialClients = [
+          { id: 'cli-1', name: 'Carlos Eduardo Silva', phone: '51998877665', cpf: '123.456.789-00', address: 'Av. Paulista, 1000 - SP', equipment: 'Notebook Dell XPS 13' },
+          { id: 'cli-2', name: 'Mariana Costa', phone: '11987654321', cpf: '987.654.321-11', address: 'Rua das Flores, 45 - RJ', equipment: 'iPhone 12 Pro Max' }
+        ];
+
+        const initialOrders = [
+          {
+            id: 'OS-1001',
+            clientId: 'cli-1',
+            equipment: 'Notebook Dell XPS 13',
+            defect: 'Não liga e aquecimento excessivo na base',
+            services: 'Troca de pasta térmica e substituição de CI de entrada',
+            price: 450.00,
+            status: 'Concluído',
+            createdAt: new Date().toLocaleDateString('pt-BR')
+          },
+          {
+            id: 'OS-1002',
+            clientId: 'cli-2',
+            equipment: 'iPhone 12 Pro Max',
+            defect: 'Tela trincada após queda',
+            services: 'Aguardando chegada do display OLED original',
+            price: 890.00,
+            status: 'Aguardando Peças',
+            createdAt: new Date().toLocaleDateString('pt-BR')
+          }
+        ];
+
+        this.saveClients(initialClients);
+        this.saveOrders(initialOrders);
+      }
+    };
+
+    /* ==========================================================================
+       APP LOGIC & NAVIGATION
+       ========================================================================== */
+    let currentIDEFile = 'index.html';
+
+    window.onload = function() {
+      DB.init();
+      checkAuth();
+      renderDashboard();
+      renderClientsTable();
+      renderOrdersTable();
+      openFileInIDE('index.html');
+    };
+
+    // Mode Switcher (App vs IDE)
+    function switchMode(mode) {
+      const viewApp = document.getElementById('view-app');
+      const viewIde = document.getElementById('view-ide');
+      const btnApp = document.getElementById('btn-mode-app');
+      const btnIde = document.getElementById('btn-mode-ide');
+
+      if (mode === 'app') {
+        viewApp.classList.remove('hidden');
+        viewIde.classList.add('hidden');
+        btnApp.className = 'px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center space-x-2 transition-all bg-brand-600 text-white shadow-md';
+        btnIde.className = 'px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center space-x-2 transition-all text-slate-400 hover:text-slate-200';
+      } else {
+        viewApp.classList.add('hidden');
+        viewIde.classList.remove('hidden');
+        btnIde.className = 'px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center space-x-2 transition-all bg-brand-600 text-white shadow-md';
+        btnApp.className = 'px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center space-x-2 transition-all text-slate-400 hover:text-slate-200';
+      }
+    }
+
+    // Tab Navigation
+    function navigateTab(tabName) {
+      document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+      document.querySelectorAll('.nav-btn').forEach(btn => {
+        btn.classList.remove('active', 'bg-slate-800/80', 'text-white', 'border', 'border-slate-700/50');
+        btn.classList.add('text-slate-400');
+      });
+
+      const selectedTab = document.getElementById(`tab-${tabName}`);
+      const selectedNav = document.getElementById(`nav-${tabName}`);
+
+      if (selectedTab) selectedTab.classList.remove('hidden');
+      if (selectedNav) {
+        selectedNav.classList.add('active', 'bg-slate-800/80', 'text-white', 'border', 'border-slate-700/50');
+        selectedNav.classList.remove('text-slate-400');
+      }
+
+      if (tabName === 'dashboard') renderDashboard();
+      if (tabName === 'clients') renderClientsTable();
+      if (tabName === 'orders') renderOrdersTable();
+    }
+
+    // Authentication Handlers
+    function checkAuth() {
+      const isLoggedIn = sessionStorage.getItem(DB_KEYS.SESSION) === 'true';
+      const authScreen = document.getElementById('auth-screen');
+      const btnLogout = document.getElementById('btn-logout');
+
+      if (isLoggedIn) {
+        authScreen.classList.add('hidden');
+        btnLogout.classList.remove('hidden');
+      } else {
+        authScreen.classList.remove('hidden');
+        btnLogout.classList.add('hidden');
+      }
+    }
+
+    function handleLogin(e) {
+      e.preventDefault();
+      const pwdInput = document.getElementById('login-password').value;
+      if (pwdInput === DB.getPassword()) {
+        sessionStorage.setItem(DB_KEYS.SESSION, 'true');
+        checkAuth();
+        showToast('Login realizado com sucesso!', 'success');
+      } else {
+        showToast('Senha incorreta! Tente novamente.', 'error');
+      }
+    }
+
+    function logout() {
+      sessionStorage.removeItem(DB_KEYS.SESSION);
+      checkAuth();
+      showToast('Sessão encerrada.', 'info');
+    }
+
+    function togglePasswordVisibility(inputId) {
+      const el = document.getElementById(inputId);
+      el.type = el.type === 'password' ? 'text' : 'password';
+    }
+
+    /* ==========================================================================
+       DASHBOARD & DATA RENDERING
+       ========================================================================== */
+    function renderDashboard() {
+      const orders = DB.getOrders();
+      const clients = DB.getClients();
+
+      // Metrics
+      const totalRevenue = orders
+        .filter(o => o.status === 'Concluído' || o.status === 'Entregue')
+        .reduce((sum, o) => sum + Number(o.price || 0), 0);
+
+      const openCount = orders.filter(o => o.status === 'Em Análise' || o.status === 'Aguardando Peças').length;
+      const completedCount = orders.filter(o => o.status === 'Concluído' || o.status === 'Entregue').length;
+
+      document.getElementById('dash-revenue').innerText = `R$ ${totalRevenue.toFixed(2)}`;
+      document.getElementById('dash-os-open').innerText = openCount;
+      document.getElementById('dash-os-completed').innerText = completedCount;
+      document.getElementById('dash-clients-count').innerText = clients.length;
+      document.getElementById('badge-total-os').innerText = orders.length;
+
+      // Recent OS Table
+      const recentBody = document.getElementById('dash-recent-os-body');
+      recentBody.innerHTML = '';
+
+      const recentOrders = [...orders].reverse().slice(0, 5);
+      if (recentOrders.length === 0) {
+        recentBody.innerHTML = `<tr><td colspan="6" class="p-4 text-center text-slate-500">Nenhuma Ordem de Serviço cadastrada.</td></tr>`;
+        return;
+      }
+
+      recentOrders.forEach(os => {
+        const client = clients.find(c => c.id === os.clientId) || { name: 'Cliente Removido' };
+        recentBody.innerHTML += `
+          <tr class="hover:bg-slate-800/40 transition">
+            <td class="p-3 font-mono font-semibold text-cyan-400">${os.id}</td>
+            <td class="p-3 font-medium text-slate-200">${client.name}</td>
+            <td class="p-3 text-slate-400">${os.equipment}</td>
+            <td class="p-3">${getStatusBadge(os.status)}</td>
+            <td class="p-3 font-mono font-semibold">R$ ${Number(os.price).toFixed(2)}</td>
+            <td class="p-3 text-right">
+              <button onclick="printOS('${os.id}')" class="text-xs text-slate-400 hover:text-cyan-400 p-1"><i class="fa-solid fa-print"></i></button>
+            </td>
+          </tr>
+        `;
+      });
+    }
+
+    /* ==========================================================================
+       CLIENT MANAGEMENT
+       ========================================================================== */
+    function renderClientsTable() {
+      const clients = DB.getClients();
+      const query = (document.getElementById('client-search')?.value || '').toLowerCase();
+      const body = document.getElementById('clients-table-body');
+      body.innerHTML = '';
+
+      const filtered = clients.filter(c => 
+        c.name.toLowerCase().includes(query) || (c.cpf && c.cpf.includes(query))
+      );
+
+      if (filtered.length === 0) {
+        body.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-slate-500">Nenhum cliente encontrado.</td></tr>`;
+        return;
+      }
+
+      filtered.forEach(cli => {
+        const cleanPhone = cli.phone.replace(/\D/g, '');
+        body.innerHTML += `
+          <tr class="hover:bg-slate-800/40 transition">
+            <td class="p-3 font-semibold text-slate-100">${cli.name}</td>
+            <td class="p-3 font-mono">
+              <a href="https://wa.me/55${cleanPhone}" target="_blank" class="text-emerald-400 hover:underline inline-flex items-center space-x-1">
+                <i class="fa-brands fa-whatsapp"></i>
+                <span>${cli.phone}</span>
+              </a>
+            </td>
+            <td class="p-3 font-mono text-slate-400">${cli.cpf || 'N/A'}</td>
+            <td class="p-3 text-slate-400">${cli.equipment || 'Não informado'}</td>
+            <td class="p-3 text-right space-x-2">
+              <button onclick="editClient('${cli.id}')" class="text-indigo-400 hover:text-indigo-300"><i class="fa-solid fa-pen"></i></button>
+              <button onclick="deleteClient('${cli.id}')" class="text-red-400 hover:text-red-300"><i class="fa-solid fa-trash"></i></button>
+            </td>
+          </tr>
+        `;
+      });
+    }
+
+    function saveClient(e) {
+      e.preventDefault();
+      const id = document.getElementById('client-id').value;
+      const clients = DB.getClients();
+
+      const newClient = {
+        id: id || `cli-${Date.now()}`,
+        name: document.getElementById('client-name').value,
+        phone: document.getElementById('client-phone').value,
+        cpf: document.getElementById('client-cpf').value,
+        address: document.getElementById('client-address').value,
+        equipment: document.getElementById('client-equipment').value
+      };
+
+      if (id) {
+        const index = clients.findIndex(c => c.id === id);
+        if (index !== -1) clients[index] = newClient;
+      } else {
+        clients.push(newClient);
+      }
+
+      DB.saveClients(clients);
+      closeModal('modal-client');
+      renderClientsTable();
+      renderDashboard();
+      showToast('Cliente salvo com sucesso!', 'success');
+    }
+
+    function editClient(id) {
+      const client = DB.getClients().find(c => c.id === id);
+      if (!client) return;
+
+      document.getElementById('client-id').value = client.id;
+      document.getElementById('client-name').value = client.name;
+      document.getElementById('client-phone').value = client.phone;
+      document.getElementById('client-cpf').value = client.cpf || '';
+      document.getElementById('client-address').value = client.address || '';
+      document.getElementById('client-equipment').value = client.equipment || '';
+
+      document.getElementById('modal-client-title').innerText = 'Editar Cliente';
+      openModal('modal-client');
+    }
+
+    function deleteClient(id) {
+      if (!confirm('Deseja realmente remover este cliente?')) return;
+      let clients = DB.getClients().filter(c => c.id !== id);
+      DB.saveClients(clients);
+      renderClientsTable();
+      renderDashboard();
+      showToast('Cliente removido.', 'info');
+    }
+
+    /* ==========================================================================
+       SERVICE ORDERS (OS) & WHATSAPP INTEGRATION
+       ========================================================================== */
+    function renderOrdersTable() {
+      const orders = DB.getOrders();
+      const clients = DB.getClients();
+      const filterStatus = document.getElementById('os-filter-status')?.value || 'ALL';
+      const body = document.getElementById('orders-table-body');
+      body.innerHTML = '';
+
+      const filtered = orders.filter(o => filterStatus === 'ALL' || o.status === filterStatus);
+
+      if (filtered.length === 0) {
+        body.innerHTML = `<tr><td colspan="7" class="p-4 text-center text-slate-500">Nenhuma Ordem de Serviço encontrada.</td></tr>`;
+        return;
+      }
+
+      filtered.reverse().forEach(os => {
+        const client = clients.find(c => c.id === os.clientId) || { name: 'Cliente Desconhecido', phone: '' };
+        
+        body.innerHTML += `
+          <tr class="hover:bg-slate-800/40 transition">
+            <td class="p-3 font-mono font-bold text-cyan-400">${os.id}</td>
+            <td class="p-3 font-mono text-slate-400 text-[11px]">${os.createdAt || 'N/A'}</td>
+            <td class="p-3 font-semibold text-slate-100">${client.name}</td>
+            <td class="p-3 text-slate-300">${os.equipment}</td>
+            <td class="p-3">${getStatusBadge(os.status)}</td>
+            <td class="p-3 font-mono font-semibold">R$ ${Number(os.price).toFixed(2)}</td>
+            <td class="p-3 text-right space-x-2">
+              <button onclick="sendWhatsAppOS('${os.id}')" title="Enviar Resumo via WhatsApp" class="text-emerald-400 hover:text-emerald-300 p-1 bg-emerald-500/10 rounded">
+                <i class="fa-brands fa-whatsapp text-sm"></i>
+              </button>
+              <button onclick="printOS('${os.id}')" title="Imprimir OS" class="text-slate-400 hover:text-white p-1">
+                <i class="fa-solid fa-print text-sm"></i>
+              </button>
+              <button onclick="editOrder('${os.id}')" title="Editar" class="text-cyan-400 hover:text-cyan-300 p-1">
+                <i class="fa-solid fa-pen text-sm"></i>
+              </button>
+              <button onclick="deleteOrder('${os.id}')" title="Excluir" class="text-red-400 hover:text-red-300 p-1">
+                <i class="fa-solid fa-trash text-sm"></i>
+              </button>
+            </td>
+          </tr>
+        `;
+      });
+    }
+
+    function saveOrder(e) {
+      e.preventDefault();
+      const id = document.getElementById('os-id').value;
+      const orders = DB.getOrders();
+
+      const newOrder = {
+        id: id || `OS-${Math.floor(1000 + Math.random() * 9000)}`,
+        clientId: document.getElementById('os-client-id').value,
+        equipment: document.getElementById('os-equipment').value,
+        defect: document.getElementById('os-defect').value,
+        services: document.getElementById('os-services').value,
+        price: parseFloat(document.getElementById('os-price').value || 0),
+        status: document.getElementById('os-status').value,
+        createdAt: id ? (orders.find(o => o.id === id)?.createdAt || new Date().toLocaleDateString('pt-BR')) : new Date().toLocaleDateString('pt-BR')
+      };
+
+      if (id) {
+        const idx = orders.findIndex(o => o.id === id);
+        if (idx !== -1) orders[idx] = newOrder;
+      } else {
+        orders.push(newOrder);
+      }
+
+      DB.saveOrders(orders);
+      closeModal('modal-os');
+      renderOrdersTable();
+      renderDashboard();
+      showToast('Ordem de Serviço salva!', 'success');
+    }
+
+    function editOrder(id) {
+      const os = DB.getOrders().find(o => o.id === id);
+      if (!os) return;
+
+      populateClientOptions();
+      document.getElementById('os-id').value = os.id;
+      document.getElementById('os-client-id').value = os.clientId;
+      document.getElementById('os-equipment').value = os.equipment;
+      document.getElementById('os-defect').value = os.defect;
+      document.getElementById('os-services').value = os.services || '';
+      document.getElementById('os-price').value = os.price;
+      document.getElementById('os-status').value = os.status;
+
+      document.getElementById('modal-os-title').innerText = `Editar ${os.id}`;
+      openModal('modal-os');
+    }
+
+    function deleteOrder(id) {
+      if (!confirm('Deseja excluir esta Ordem de Serviço?')) return;
+      let orders = DB.getOrders().filter(o => o.id !== id);
+      DB.saveOrders(orders);
+      renderOrdersTable();
+      renderDashboard();
+      showToast('Ordem de serviço removida.', 'info');
+    }
+
+    // Send formatted OS message via WhatsApp wa.me link
+    function sendWhatsAppOS(osId) {
+      const os = DB.getOrders().find(o => o.id === osId);
+      if (!os) return;
+
+      const client = DB.getClients().find(c => c.id === os.clientId);
+      if (!client || !client.phone) {
+        showToast('Cliente não possui telefone cadastrado.', 'error');
+        return;
+      }
+
+      const cleanPhone = client.phone.replace(/\D/g, '');
+      const msg = `🛠️ *TECH ASSISTÊNCIA - ATUALIZAÇÃO DE OS* 🛠️\n\n` +
+                  `Olá *${client.name}*!\n` +
+                  `Segue o resumo da sua Ordem de Serviço:\n\n` +
+                  `📋 *OS:* ${os.id}\n` +
+                  `💻 *Equipamento:* ${os.equipment}\n` +
+                  `⚠️ *Defeito:* ${os.defect}\n` +
+                  `🔧 *Status Atual:* *${os.status.toUpperCase()}*\n` +
+                  `💰 *Valor Total:* R$ ${Number(os.price).toFixed(2)}\n\n` +
+                  `Dúvidas? Responda a esta mensagem. Obrigado pela preferência!`;
+
+      const encodedMsg = encodeURIComponent(msg);
+      window.open(`https://wa.me/55${cleanPhone}?text=${encodedMsg}`, '_blank');
+    }
+
+    // Print Receipt Modal Template
+    function printOS(osId) {
+      const os = DB.getOrders().find(o => o.id === osId);
+      if (!os) return;
+
+      const client = DB.getClients().find(c => c.id === os.clientId) || { name: 'N/A', phone: 'N/A', cpf: 'N/A' };
+      const container = document.getElementById('printable-os');
+
+      container.innerHTML = `
+        <div class="border border-slate-700 p-6 rounded-xl space-y-4 text-xs font-mono text-slate-100 bg-slate-900">
+          <div class="flex justify-between items-center border-b border-slate-700 pb-4">
+            <div>
+              <h2 class="text-xl font-bold text-cyan-400">TECH ASSISTÊNCIA TÉCNICA</h2>
+              <p class="text-slate-400">Soluções em Manutenção e Eletrônica</p>
+            </div>
+            <div class="text-right">
+              <span class="text-lg font-bold text-white">${os.id}</span>
+              <p class="text-slate-400">Data: ${os.createdAt || 'N/A'}</p>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-4 py-2 border-b border-slate-800">
+            <div>
+              <span class="text-slate-500 uppercase">Cliente:</span>
+              <p class="font-bold text-white">${client.name}</p>
+              <p class="text-slate-400">Tel: ${client.phone} | CPF: ${client.cpf || 'N/A'}</p>
+            </div>
+            <div>
+              <span class="text-slate-500 uppercase">Equipamento:</span>
+              <p class="font-bold text-white">${os.equipment}</p>
+              <p class="text-slate-400">Status: <span class="text-cyan-400">${os.status}</span></p>
+            </div>
+          </div>
+
+          <div class="space-y-2">
+            <div>
+              <span class="text-slate-500 uppercase">Defeito Declarado:</span>
+              <p class="bg-slate-950 p-2.5 rounded border border-slate-800 text-slate-300">${os.defect}</p>
+            </div>
+            <div>
+              <span class="text-slate-500 uppercase">Serviços e Peças Aplicadas:</span>
+              <p class="bg-slate-950 p-2.5 rounded border border-slate-800 text-slate-300">${os.services || 'Em análise'}</p>
+            </div>
+          </div>
+
+          <div class="flex justify-between items-center pt-4 border-t border-slate-700 text-sm">
+            <span class="font-bold text-slate-300">VALOR TOTAL DO ORÇAMENTO:</span>
+            <span class="text-xl font-bold text-emerald-400">R$ ${Number(os.price).toFixed(2)}</span>
+          </div>
+
+          <div class="pt-8 text-center text-slate-500 text-[10px] space-y-4">
+            <p>Garantia de 90 dias para os serviços prestados conforme CDC.</p>
+            <div class="flex justify-around pt-6">
+              <div class="border-t border-slate-600 w-40 pt-1">Assinatura Cliente</div>
+              <div class="border-t border-slate-600 w-40 pt-1">Técnico Responsável</div>
+            </div>
+          </div>
+        </div>
+      `;
+
+      openModal('modal-print-os');
+    }
+
+    // Helper: Badges
+    function getStatusBadge(status) {
+      const styles = {
+        'Em Análise': 'bg-amber-500/10 text-amber-400 border-amber-500/20',
+        'Aguardando Peças': 'bg-purple-500/10 text-purple-400 border-purple-500/20',
+        'Aprovado': 'bg-blue-500/10 text-blue-400 border-blue-500/20',
+        'Concluído': 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+        'Entregue': 'bg-slate-500/10 text-slate-300 border-slate-500/20'
+      };
+      return `<span class="px-2.5 py-1 rounded-md text-[10px] font-semibold border ${styles[status] || styles['Em Análise']}">${status}</span>`;
+    }
+
+    /* ==========================================================================
+       IDE & VIRTUAL FILE EXPLORER CONTROLS
+       ========================================================================== */
+    function openFileInIDE(filename) {
+      currentIDEFile = filename;
+      const editor = document.getElementById('ide-editor');
+      const filenameLabel = document.getElementById('ide-active-filename');
+      const sizeLabel = document.getElementById('ide-file-size');
+
+      // Update Active Tab Styling
+      document.querySelectorAll('.file-tree-btn').forEach(btn => {
+        btn.classList.remove('active', 'bg-slate-800/80', 'text-slate-300');
+        btn.classList.add('text-slate-400');
+      });
+
+      const activeBtn = document.getElementById(`file-tab-${filename}`);
+      if (activeBtn) {
+        activeBtn.classList.add('active', 'bg-slate-800/80', 'text-slate-300');
+        activeBtn.classList.remove('text-slate-400');
+      }
+
+      const content = VIRTUAL_FILES[filename] || '';
+      editor.value = content;
+      filenameLabel.innerText = filename;
+      sizeLabel.innerText = `(${(content.length / 1024).toFixed(2)} KB)`;
+    }
+
+    function copyCurrentCode() {
+      const editor = document.getElementById('ide-editor');
+      editor.select();
+      document.execCommand('copy');
+      showToast(`Código de ${currentIDEFile} copiado!`, 'success');
+    }
+
+    function downloadProjectZip() {
+      if (typeof JSZip === 'undefined') {
+        showToast('Biblioteca JSZip não carregada.', 'error');
+        return;
+      }
+
+      const zip = new JSZip();
+      const folder = zip.folder("tech-assistencia");
+
+      folder.file("index.html", VIRTUAL_FILES['index.html']);
+      folder.file("style.css", VIRTUAL_FILES['style.css']);
+      folder.file("app.js", VIRTUAL_FILES['app.js']);
+      folder.file("database.js", VIRTUAL_FILES['database.js']);
+
+      zip.generateAsync({ type: "blob" }).then(function(content) {
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(content);
+        a.download = "tech-assistencia-projeto.zip";
+        a.click();
+        showToast('Download do projeto ZIP iniciado!', 'success');
+      });
+    }
+
+    /* ==========================================================================
+       SETTINGS & SECURITY
+       ========================================================================== */
+    function handleChangePassword(e) {
+      e.preventDefault();
+      const current = document.getElementById('pwd-current').value;
+      const newPwd = document.getElementById('pwd-new').value;
+      const confirmPwd = document.getElementById('pwd-confirm').value;
+
+      if (current !== DB.getPassword()) {
+        showToast('Senha atual incorreta.', 'error');
+        return;
+      }
+
+      if (newPwd !== confirmPwd) {
+        showToast('A nova senha e a confirmação não coincidem.', 'error');
+        return;
+      }
+
+      DB.setPassword(newPwd);
+      showToast('Senha alterada com sucesso!', 'success');
+      document.getElementById('pwd-current').value = '';
+      document.getElementById('pwd-new').value = '';
+      document.getElementById('pwd-confirm').value = '';
+    }
+
+    function seedDemoData() {
+      DB.seedDefaultData();
+      renderDashboard();
+      renderClientsTable();
+      renderOrdersTable();
+      showToast('Dados demonstrativos carregados!', 'success');
+    }
+
+    function resetSystemData() {
+      if (!confirm('ATENÇÃO: Deseja apagar todos os clientes e ordens de serviço?')) return;
+      localStorage.removeItem(DB_KEYS.CLIENTS);
+      localStorage.removeItem(DB_KEYS.ORDERS);
+      renderDashboard();
+      renderClientsTable();
+      renderOrdersTable();
+      showToast('Banco de dados zerado.', 'info');
+    }
+
+    /* ==========================================================================
+       UTILITIES & MODALS
+       ========================================================================== */
+    function openModal(modalId) {
+      if (modalId === 'modal-os') {
+        populateClientOptions();
+      }
+      document.getElementById(modalId).classList.remove('hidden');
+    }
+
+    function closeModal(modalId) {
+      document.getElementById(modalId).classList.add('hidden');
+      if (modalId === 'modal-client') {
+        document.getElementById('client-id').value = '';
+        document.getElementById('client-name').value = '';
+        document.getElementById('client-phone').value = '';
+        document.getElementById('client-cpf').value = '';
+        document.getElementById('client-address').value = '';
+        document.getElementById('client-equipment').value = '';
+      }
+      if (modalId === 'modal-os') {
+        document.getElementById('os-id').value = '';
+        document.getElementById('os-equipment').value = '';
+        document.getElementById('os-defect').value = '';
+        document.getElementById('os-services').value = '';
+        document.getElementById('os-price').value = '';
+      }
+    }
+
+    function populateClientOptions() {
+      const select = document.getElementById('os-client-id');
+      const clients = DB.getClients();
+      select.innerHTML = '';
+
+      if (clients.length === 0) {
+        select.innerHTML = '<option value="">Nenhum cliente cadastrado</option>';
+        return;
+      }
+
+      clients.forEach(c => {
+        select.innerHTML += `<option value="${c.id}">${c.name} (${c.phone})</option>`;
+      });
+    }
+
+    function showToast(message, type = 'info') {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      
+      const bgColors = {
+        success: 'bg-emerald-500 text-slate-950',
+        error: 'bg-red-500 text-white',
+        info: 'bg-brand-600 text-white'
+      };
+
+      toast.className = `px-4 py-3 rounded-xl shadow-xl font-medium text-xs flex items-center space-x-2 transition-all duration-300 transform translate-x-10 ${bgColors[type]}`;
+      toast.innerHTML = `<i class="fa-solid fa-circle-info"></i><span>${message}</span>`;
+
+      container.appendChild(toast);
+
+      setTimeout(() => toast.classList.remove('translate-x-10'), 10);
+      setTimeout(() => {
+        toast.classList.add('opacity-0', 'translate-x-10');
+        setTimeout(() => toast.remove(), 300);
+      }, 3000);
+    }
+  </script>
+</body>
+</html>
